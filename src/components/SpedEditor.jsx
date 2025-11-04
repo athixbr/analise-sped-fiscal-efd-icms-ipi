@@ -1,6 +1,14 @@
 import React, { useState, useMemo, useEffect } from "react";
 import Button from "./ui/Button";
 import Card from "./ui/Card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "./ui/dialog";
 import { 
   ArrowLeft, 
   Download, 
@@ -14,8 +22,10 @@ import {
   ChevronDown,
   FileIcon,
   Package,
-  BarChart3
+  BarChart3,
+  Eye
 } from "lucide-react";
+import { formatarMoeda, formatarData } from "../utils/dataProcessor";
 
 const SpedEditor = ({ spedData, arquivoInfo, onBack }) => {
   // Estados para edição
@@ -42,6 +52,10 @@ const SpedEditor = ({ spedData, arquivoInfo, onBack }) => {
   const [batchEditModal, setBatchEditModal] = useState(false);
   const [batchField, setBatchField] = useState('');
   const [batchValue, setBatchValue] = useState('');
+  
+  // Estado para modal de detalhes da nota
+  const [notaDetalhesModal, setNotaDetalhesModal] = useState(false);
+  const [notaSelecionadaParaEdicao, setNotaSelecionadaParaEdicao] = useState(null);
 
   // Inicializar dados editáveis
   useEffect(() => {
@@ -495,6 +509,42 @@ const SpedEditor = ({ spedData, arquivoInfo, onBack }) => {
 
   const handleBatchEdit = () => {
     setBatchEditModal(true);
+  };
+
+  // Função para abrir modal de edição detalhada da nota
+  const handleAbrirEdicaoNota = (node) => {
+    // Buscar a nota completa nos dados originais
+    let notaCompleta = null;
+    
+    // Determinar a categoria e número da nota
+    const numeroNota = node.dados?.numeroNota || node.dados?.numeroDoc;
+    const chaveNfe = node.dados?.chaveNfe;
+    const categoria = node.categoria || (node.type?.includes('D100') ? 'entradas' : 'saidas');
+    
+    if (categoria === 'saidas' && editData?.saidas) {
+      notaCompleta = editData.saidas.find(nota => 
+        nota.numeroDoc === numeroNota || 
+        nota.numeroNota === numeroNota ||
+        (chaveNfe && nota.chaveNfe === chaveNfe)
+      );
+    } else if (categoria === 'entradas' && editData?.entradas) {
+      notaCompleta = editData.entradas.find(nota => 
+        nota.numeroDoc === numeroNota ||
+        nota.numeroNota === numeroNota ||
+        (chaveNfe && nota.chaveNfe === chaveNfe)
+      );
+    }
+    
+    if (notaCompleta) {
+      setNotaSelecionadaParaEdicao({
+        ...notaCompleta,
+        nodeId: node.id,
+        categoria: categoria
+      });
+      setNotaDetalhesModal(true);
+    } else {
+      alert('Nota não encontrada nos dados. Verifique se os dados foram carregados corretamente.');
+    }
   };
 
   const getCommonFields = () => {
@@ -1092,7 +1142,21 @@ const SpedEditor = ({ spedData, arquivoInfo, onBack }) => {
                         // Linha de Nota Fiscal (cabeçalho expansível)
                         <>
                           <td className="p-2 border-r border-gray-200 dark:border-gray-700 font-medium">
-                            🧾 NF: {dados.numeroNota} | Série: {dados.serie} | {dados.dataEmissao ? new Date(dados.dataEmissao).toLocaleDateString('pt-BR') : ''} | R$ {Number(dados.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            <div className="flex items-center justify-between">
+                              <span>
+                                🧾 NF: {dados.numeroNota} | Série: {dados.serie} | {dados.dataEmissao ? new Date(dados.dataEmissao).toLocaleDateString('pt-BR') : ''} | R$ {Number(dados.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAbrirEdicaoNota(node);
+                                }}
+                                className="ml-2 px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded flex items-center gap-1"
+                                title="Editar nota detalhada"
+                              >
+                                ✏️ Editar
+                              </button>
+                            </div>
                           </td>
                           <td className="p-2 border-r border-gray-200 dark:border-gray-700">
                             <EditableCell node={node} field="cstIcms" value={dados.situacao || ''} />
@@ -1343,6 +1407,161 @@ const SpedEditor = ({ spedData, arquivoInfo, onBack }) => {
           </Card>
         </div>
       )}
+
+      {/* Modal de Detalhes da Nota */}
+      <Dialog open={notaDetalhesModal} onOpenChange={setNotaDetalhesModal}>
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[85vh] p-0">
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle className="text-xl font-semibold">
+              📋 Detalhes da Nota Fiscal
+            </DialogTitle>
+            <DialogDescription>
+              {notaSelecionadaParaEdicao && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div>
+                    <span className="font-medium text-gray-600 dark:text-gray-300">Número:</span>{" "}
+                    <span className="font-semibold">{notaSelecionadaParaEdicao.numeroDoc || notaSelecionadaParaEdicao.numeroNota}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600 dark:text-gray-300">Série:</span>{" "}
+                    <span className="font-semibold">{notaSelecionadaParaEdicao.serie}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600 dark:text-gray-300">Data:</span>{" "}
+                    <span className="font-semibold">{formatarData(notaSelecionadaParaEdicao.dataDocumento || notaSelecionadaParaEdicao.dataEmissao)}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600 dark:text-gray-300">Valor Total:</span>{" "}
+                    <span className="font-semibold text-green-600">{formatarMoeda(notaSelecionadaParaEdicao.valorDocumento || notaSelecionadaParaEdicao.valorTotal || 0)}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600 dark:text-gray-300">Participante:</span>{" "}
+                    <span className="font-semibold">{notaSelecionadaParaEdicao.participante}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600 dark:text-gray-300">CFOP:</span>{" "}
+                    <span className="font-semibold">{notaSelecionadaParaEdicao.cfop}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600 dark:text-gray-300">Situação:</span>{" "}
+                    <span className="font-semibold">{notaSelecionadaParaEdicao.situacao}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600 dark:text-gray-300">Operação:</span>{" "}
+                    <span className="font-semibold">
+                      {notaSelecionadaParaEdicao.indicadorOperacao === "1" ? "Saída" : "Entrada"}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-hidden p-6 pt-2">
+            <div className="h-full overflow-auto">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                📊 Resumo dos Itens
+                <span className="text-sm font-normal text-gray-500">
+                  ({notaSelecionadaParaEdicao?.itens?.length || notaSelecionadaParaEdicao?.itensC170?.length || 0} itens)
+                </span>
+              </h3>
+              
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-border">
+                  <thead className="bg-muted/40">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Código
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Descrição
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Qtd
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Valor Item
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        CFOP
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Valor ICMS
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Ações
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-background divide-y divide-border">
+                    {(notaSelecionadaParaEdicao?.itens || notaSelecionadaParaEdicao?.itensC170 || []).map((item, idx) => (
+                      <tr key={idx} className={idx % 2 === 0 ? "bg-background" : "bg-muted/20"}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium font-mono">
+                          {item.codItem || item.codigo || ""}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground max-w-xs truncate" title={item.descrCompl || item.descricao}>
+                          {item.descrCompl || item.descricao || ""}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                          {(item.quantidade || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+                          {formatarMoeda(item.valorItem || item.valorOperacao || 0)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-700 dark:text-blue-300">
+                          {item.cfop || ""}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-blue-700 dark:text-blue-300">
+                          {formatarMoeda(item.valorIcms || 0)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <Button
+                            onClick={() => {
+                              // Aqui poderia abrir modal de detalhes completos do item
+                              alert(`Detalhes do item: ${item.codItem || item.codigo} - ${item.descrCompl || item.descricao}`);
+                            }}
+                            className="inline-flex items-center gap-2"
+                            size="sm"
+                            variant="outline"
+                          >
+                            <Eye className="h-4 w-4" />
+                            <span>Ver Detalhes</span>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {(!notaSelecionadaParaEdicao || ((notaSelecionadaParaEdicao?.itens || notaSelecionadaParaEdicao?.itensC170 || []).length === 0)) && (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                          <div className="flex flex-col items-center gap-2">
+                            📭
+                            <span>Nenhum item encontrado para esta nota</span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter className="p-6 pt-2 border-t border-border bg-card">
+            <div className="flex items-center justify-between w-full text-xs text-muted-foreground">
+              <div>
+                Total de Itens: {(notaSelecionadaParaEdicao?.itens || notaSelecionadaParaEdicao?.itensC170 || []).length} • 
+                Valor Total: {formatarMoeda(notaSelecionadaParaEdicao?.valorDocumento || notaSelecionadaParaEdicao?.valorTotal || 0)}
+              </div>
+              <Button
+                onClick={() => setNotaDetalhesModal(false)}
+                className="px-6"
+              >
+                Fechar
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
