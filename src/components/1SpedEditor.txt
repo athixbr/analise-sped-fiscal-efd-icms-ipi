@@ -1,0 +1,412 @@
+import React, { useState, useMemo, useEffect } from "react";
+import { ArrowLeft, FileText, Edit3, Save, Download, Search, Filter, CheckSquare, Square, ChevronDown, ChevronRight } from "lucide-react";
+import Button from "./ui/Button";
+import Card from "./ui/Card";
+
+const SpedEditor = ({ onBack, spedData = null, arquivoInfo = null }) => {
+  const [expandedSections, setExpandedSections] = useState(new Set(["notas"]));
+  const [filters, setFilters] = useState({});
+  const [selectedRows, setSelectedRows] = useState(new Set());
+  const [editingRow, setEditingRow] = useState(null);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Transforma dados SPED em registros editáveis tabulares
+  const tableData = useMemo(() => {
+    if (!spedData) return { registros: [], empresa: null };
+    
+    const registros = [];
+    
+    // Registro empresa (0000)
+    if (spedData.companyName || spedData.cnpj) {
+      registros.push({
+        id: "emp_0000",
+        tipo: "0000",
+        tipoDescricao: "Abertura",
+        dados: {
+          nome: spedData.companyName || "",
+          cnpj: spedData.cnpj || "",
+          periodo_inicio: spedData.periodo?.inicio || "",
+          periodo_fim: spedData.periodo?.fim || ""
+        }
+      });
+    }
+
+    // Registros de Notas (C100) com seus itens
+    const todasNotas = [...(spedData.entradas || []), ...(spedData.saidas || [])];
+    todasNotas.forEach((nota, idx) => {
+      // Registro C100 (Nota)
+      registros.push({
+        id: `c100_${idx}`,
+        tipo: "C100", 
+        tipoDescricao: "Nota Fiscal",
+        dados: {
+          numeroDoc: nota.numeroDoc || "",
+          chaveNfe: nota.chaveNfe || "",
+          dataDocumento: nota.dataDocumento || "",
+          dataEntradaSaida: nota.dataEntradaSaida || "",
+          valorDocumento: nota.valorDocumento || 0,
+          valorMercadoria: nota.valorMercadoria || 0,
+          indicadorOperacao: nota.indicadorOperacao || "1",
+          situacao: nota.situacao || "00"
+        }
+      });
+
+      // Registros C190 (Totais por CFOP)
+      (nota.itens || []).forEach((item, itemIdx) => {
+        registros.push({
+          id: `c190_${idx}_${itemIdx}`,
+          tipo: "C190",
+          tipoDescricao: "Total por CFOP",
+          notaPai: `c100_${idx}`,
+          dados: {
+            cfop: item.cfop || "",
+            valorOperacao: item.valorOperacao || 0,
+            cstIcms: item.cstIcms || "",
+            aliqIcms: item.aliqIcms || 0,
+            valorBcIcms: item.valorBcIcms || 0,
+            valorIcms: item.valorIcms || 0
+          }
+        });
+      });
+
+      // Registros C170 (Itens detalhados)
+      (nota.itensC170 || []).forEach((item, itemIdx) => {
+        registros.push({
+          id: `c170_${idx}_${itemIdx}`,
+          tipo: "C170",
+          tipoDescricao: "Item da Nota",
+          notaPai: `c100_${idx}`,
+          dados: {
+            numItem: item.numItem || "",
+            codItem: item.codItem || "",
+            descrCompl: item.descrCompl || "",
+            quantidade: item.quantidade || 0,
+            unidade: item.unidade || "",
+            valorItem: item.valorItem || 0,
+            valorDesconto: item.valorDesconto || 0,
+            cfop: item.cfop || "",
+            cstIcms: item.cstIcms || "",
+            aliqIcms: item.aliqIcms || 0,
+            valorBcIcms: item.valorBcIcms || 0,
+            valorIcms: item.valorIcms || 0
+          }
+        });
+      });
+    });
+
+    return { registros };
+  }, [spedData]);
+
+  // Dados filtrados
+  const filteredData = useMemo(() => {
+    let filtered = tableData.registros;
+
+    // Filtro por termo de busca
+    if (searchTerm) {
+      filtered = filtered.filter(registro => {
+        const searchText = searchTerm.toLowerCase();
+        return (
+          registro.tipo.toLowerCase().includes(searchText) ||
+          registro.tipoDescricao.toLowerCase().includes(searchText) ||
+          Object.values(registro.dados).some(valor => 
+            String(valor).toLowerCase().includes(searchText)
+          )
+        );
+      });
+    }
+
+    // Filtros específicos por campo
+    filtered = filtered.filter(registro => {
+      return Object.entries(filters).every(([campo, valor]) => {
+        if (!valor) return true;
+        const dadosCampo = String(registro.dados[campo] || "").toLowerCase();
+        return dadosCampo.includes(String(valor).toLowerCase());
+      });
+    });
+
+    return filtered;
+  }, [tableData.registros, searchTerm, filters]);
+
+  // Funções do editor
+  const handleRowSelect = (rowId) => {
+    const newSelected = new Set(selectedRows);
+    if (newSelected.has(rowId)) {
+      newSelected.delete(rowId);
+    } else {
+      newSelected.add(rowId);
+    }
+    setSelectedRows(newSelected);
+  };
+
+  const handleBulkEdit = (campo, valor) => {
+    selectedRows.forEach(rowId => {
+      const registro = tableData.registros.find(r => r.id === rowId);
+      if (registro) {
+        registro.dados[campo] = valor;
+      }
+    });
+    setHasChanges(true);
+    setSelectedRows(new Set());
+  };
+
+  const handleSingleEdit = (rowId, campo, valor) => {
+    const registro = tableData.registros.find(r => r.id === rowId);
+    if (registro) {
+      registro.dados[campo] = valor;
+      setHasChanges(true);
+    }
+  };
+
+  const handleSave = () => {
+    
+    console.log("Salvando alterações...", tableData.registros);
+    setHasChanges(false);
+  };
+
+  const generateSpedText = () => {
+    let spedText = "";
+    
+    tableData.registros.forEach(registro => {
+      if (registro.tipo === "0000") {
+        spedText += `|0000|019|0|${registro.dados.periodo_inicio?.replace(/-/g, '') || ''}|${registro.dados.periodo_fim?.replace(/-/g, '') || ''}|${registro.dados.nome || ''}|${registro.dados.cnpj || ''}||SP||\n`;
+      } else if (registro.tipo === "C100") {
+        spedText += `|C100|${registro.dados.indicadorOperacao}|0|55|00|${registro.dados.situacao}|123|${registro.dados.numeroDoc}|${registro.dados.chaveNfe}|${registro.dados.dataDocumento?.replace(/-/g, '') || ''}|${registro.dados.dataEntradaSaida?.replace(/-/g, '') || ''}|${registro.dados.valorDocumento || '0,00'}|0|0|0|${registro.dados.valorMercadoria || '0,00'}|0|0|0|0|0|\n`;
+      } else if (registro.tipo === "C190") {
+        spedText += `|C190|${registro.dados.cstIcms}|${registro.dados.cfop}|${registro.dados.aliqIcms || '0,00'}|${registro.dados.valorOperacao || '0,00'}|${registro.dados.valorBcIcms || '0,00'}|${registro.dados.valorIcms || '0,00'}|\n`;
+      } else if (registro.tipo === "C170") {
+        spedText += `|C170|${registro.dados.numItem}|${registro.dados.codItem}|${registro.dados.descrCompl}|${registro.dados.quantidade || '0,000'}|${registro.dados.unidade}|${registro.dados.valorItem || '0,00'}|${registro.dados.valorDesconto || '0,00'}|||${registro.dados.cfop}|${registro.dados.cstIcms}||${registro.dados.aliqIcms || '0,00'}|${registro.dados.valorBcIcms || '0,00'}|${registro.dados.valorIcms || '0,00'}|\n`;
+      }
+    });
+    
+    spedText += "|9999|1|\n";
+    return spedText;
+  };
+
+  const handleExport = () => {
+    try {
+      const spedContent = generateSpedText();
+      const blob = new Blob([spedContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${arquivoInfo?.name?.replace('.txt', '') || 'sped'}_editado_${new Date().toISOString().split('T')[0]}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      alert('Erro ao exportar arquivo SPED');
+    }
+  };
+
+  if (!spedData) {
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={onBack}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Edit3 className="h-6 w-6" />
+                Editor SPED
+              </h1>
+              <p className="text-muted-foreground">
+                Edite os dados do arquivo SPED de forma estruturada
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <Card className="p-8 text-center">
+          <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-xl font-semibold mb-2">Nenhum SPED carregado</h3>
+          <p className="text-muted-foreground mb-4">
+            Para usar o editor, primeiro carregue um arquivo SPED através da página principal.
+          </p>
+          <Button onClick={onBack} className="flex items-center gap-2 mx-auto">
+            <ArrowLeft className="h-4 w-4" />
+            Voltar ao Dashboard
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  const handleSave = () => {
+    // TODO: Implementar salvamento das alterações
+    // console.log("Salvando alterações...", editData);
+    setHasChanges(false);
+  };
+
+  const handleExport = () => {
+    
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={onBack}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Voltar
+          </Button>
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Edit3 className="h-6 w-6" />
+                Editor SPED
+              </h1>
+              <p className="text-muted-foreground">
+                {arquivoInfo?.name || "Arquivo SPED"} - {spedData.companyName || "Empresa"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {hasChanges && (
+              <span className="text-sm text-orange-600 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded">
+                Alterações não salvas
+              </span>
+            )}
+            <Button
+              variant="outline"
+              onClick={handleSave}
+              disabled={!hasChanges}
+              className="flex items-center gap-2"
+            >
+              <Save className="h-4 w-4" />
+              Salvar
+            </Button>
+            <Button
+              onClick={handleExport}
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Exportar TXT
+            </Button>
+          </div>
+        </div>
+
+        {/* Informações da Empresa */}
+        <Card className="p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">📊 Informações da Empresa</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Empresa</label>
+              <p className="text-sm bg-muted p-2 rounded">
+                {spedData.companyName || "Não informado"}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">CNPJ</label>
+              <p className="text-sm bg-muted p-2 rounded">
+                {spedData.cnpj || "Não informado"}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Período</label>
+              <p className="text-sm bg-muted p-2 rounded">
+                {spedData.periodo?.inicio && spedData.periodo?.fim
+                  ? `${new Date(spedData.periodo.inicio).toLocaleDateString()} a ${new Date(spedData.periodo.fim).toLocaleDateString()}`
+                  : "Não informado"}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Resumo dos Dados */}
+        <Card className="p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">📈 Resumo dos Dados</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <p className="text-2xl font-bold text-green-600">{spedData.entradas?.length || 0}</p>
+              <p className="text-sm text-green-700 dark:text-green-300">Notas de Entrada</p>
+            </div>
+            <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-2xl font-bold text-blue-600">{spedData.saidas?.length || 0}</p>
+              <p className="text-sm text-blue-700 dark:text-blue-300">Notas de Saída</p>
+            </div>
+            <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+              <p className="text-2xl font-bold text-purple-600">
+                {(spedData.entradas?.length || 0) + (spedData.saidas?.length || 0)}
+              </p>
+              <p className="text-sm text-purple-700 dark:text-purple-300">Total de Notas</p>
+            </div>
+            <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+              <p className="text-2xl font-bold text-orange-600">
+                R$ {(spedData.totalGeral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+              <p className="text-sm text-orange-700 dark:text-orange-300">Valor Total</p>
+            </div>
+          </div>
+        </Card>      {/* Resumo dos Dados */}
+      <Card className="p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-4">📈 Resumo dos Dados</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <p className="text-2xl font-bold text-green-600">{editData.entradas?.length || 0}</p>
+            <p className="text-sm text-green-700 dark:text-green-300">Notas de Entrada</p>
+          </div>
+          <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <p className="text-2xl font-bold text-blue-600">{editData.saidas?.length || 0}</p>
+            <p className="text-sm text-blue-700 dark:text-blue-300">Notas de Saída</p>
+          </div>
+          <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+            <p className="text-2xl font-bold text-purple-600">
+              {(editData.entradas?.length || 0) + (editData.saidas?.length || 0)}
+            </p>
+            <p className="text-sm text-purple-700 dark:text-purple-300">Total de Notas</p>
+          </div>
+          <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+            <p className="text-2xl font-bold text-orange-600">
+              R$ {(editData.totalGeral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-sm text-orange-700 dark:text-orange-300">Valor Total</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Editor em Desenvolvimento */}
+      <Card className="p-8 text-center">
+        <Edit3 className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+        <h3 className="text-xl font-semibold mb-2">Editor em Desenvolvimento</h3>
+        <p className="text-muted-foreground mb-4">
+          O editor hierárquico está sendo implementado. Em breve você poderá editar:
+        </p>
+        <div className="text-left max-w-md mx-auto space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+            <span className="text-sm">Dados das notas fiscais (C100)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+            <span className="text-sm">Totais por CFOP (C190)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+            <span className="text-sm">Itens detalhados (C170)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+            <span className="text-sm">Validações e recálculos automáticos</span>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+export default SpedEditor;

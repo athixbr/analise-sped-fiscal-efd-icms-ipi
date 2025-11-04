@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { parseSpedFile } from "./utils/spedParser";
 import FileUpload from "./components/FileUpload";
 import Dashboard from "./components/Dashboard";
-import { FileText, BarChart3, Upload } from "lucide-react";
+import { FileText, BarChart3, Upload, Edit3 } from "lucide-react";
 import ThemeToggle from "./components/ThemeToggle";
 import Button from "./components/ui/Button";
 import { addSped } from "./db/daos/spedDao";
@@ -13,6 +13,7 @@ import { toProcessedData } from "./db/adapters/toProcessedData";
 import { db } from "./db";
 import XmlUpload from "./components/XmlUpload";
 import SpedXmlComparison from "./components/SpedXmlComparison";
+import SpedEditor from "./components/SpedEditor";
 
 function App() {
   const [dadosProcessados, setDadosProcessados] = useState(null);
@@ -23,6 +24,7 @@ function App() {
   const [savedSpedId, setSavedSpedId] = useState(null);
   const workerRef = useRef(null);
   const [showManager, setShowManager] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
   const [xmlVersion, setXmlVersion] = useState(0);
 
   useEffect(() => {
@@ -151,6 +153,7 @@ function App() {
     setError(null);
     setProgress(0);
     setShowManager(false);
+    setShowEditor(false);
   };
 
   const handleLoadFromDb = async (spedId) => {
@@ -166,6 +169,7 @@ function App() {
         });
         setSavedSpedId(spedId);
         setShowManager(false);
+        setShowEditor(false);
         return;
       } catch (e) {
         // fallback
@@ -185,6 +189,7 @@ function App() {
       });
       setSavedSpedId(spedId);
       setShowManager(false);
+      setShowEditor(false);
     } catch (e) {
       console.error("Falha ao carregar SPED do banco:", e);
       setError(e?.message || "Falha ao carregar SPED do banco");
@@ -226,6 +231,17 @@ function App() {
                 <FileText className="h-4 w-4" />
                 Meus SPEDs
               </Button>
+              {dadosProcessados && (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowEditor(true)}
+                  className="flex items-center gap-2"
+                  title="Editor SPED"
+                >
+                  <Edit3 className="h-4 w-4" />
+                  Editor
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={handleReset}
@@ -243,6 +259,12 @@ function App() {
       <main className="w-full px-2 sm:px-3 lg:px-4 py-4">
         {showManager ? (
           <SpedManager onBack={() => setShowManager(false)} onLoad={handleLoadFromDb} />
+        ) : showEditor ? (
+          <SpedEditor 
+            onBack={() => setShowEditor(false)} 
+            spedData={dadosProcessados}
+            arquivoInfo={arquivoInfo}
+          />
         ) : !dadosProcessados ? (
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-8">

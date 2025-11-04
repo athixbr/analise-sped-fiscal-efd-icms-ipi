@@ -24,6 +24,100 @@ export interface NotaItemC170 {
   valorIcms?: number;
 }
 
+// Interface completa para item detalhado (C170/D170) com todos os campos tributários
+export interface ItemDetalhadoCompleto {
+  // Identificação
+  numItem: number;
+  codItem: string;
+  descrCompl: string;
+  
+  // Quantidade e Valores
+  quantidade: number;
+  unidade: string;
+  valorItem: number;
+  valorDesconto: number;
+  indMov: string;
+  
+  // CFOP e Natureza
+  cfop: string;
+  codNat: string;
+  
+  // ICMS
+  cstIcms: string;
+  vlBcIcms: number;
+  aliqIcms: number;
+  vlIcms: number;
+  vlBcIcmsSt: number;
+  aliqSt: number;
+  vlIcmsSt: number;
+  indApur: string;
+  
+  // IPI
+  cstIpi: string;
+  codEnq: string;
+  vlBcIpi: number;
+  aliqIpi: number;
+  vlIpi: number;
+  
+  // PIS
+  cstPis: string;
+  vlBcPis: number;
+  aliqPis: number;
+  quantBcPis: number;
+  aliqPisQuant: number;
+  vlPis: number;
+  
+  // COFINS
+  cstCofins: string;
+  vlBcCofins: number;
+  aliqCofins: number;
+  quantBcCofins: number;
+  aliqCofinsQuant: number;
+  vlCofins: number;
+  
+  // Contábil
+  codCta: string;
+  vlAbatNt: number;
+  
+  // Metadados para edição
+  tipo: 'saida' | 'entrada'; // C170 ou D170
+  documentoId?: string; // ID do documento pai
+}
+
+// Interface para documento de entrada (D100)
+export interface DocumentoEntrada {
+  indOper: string;
+  indEmit: string;
+  codPart: string;
+  codMod: string;
+  codSit: string;
+  ser: string;
+  sub: string;
+  numDoc: string;
+  chvNfe: string;
+  dtDoc: string;
+  dtEsS: string;
+  vlDoc: number;
+  indPgto: string;
+  vlDesc: number;
+  vlAbatNt: number;
+  vlMerc: number;
+  indFrt: string;
+  vlFrt: number;
+  vlSeg: number;
+  vlOutDa: number;
+  vlBcIcms: number;
+  vlIcms: number;
+  vlBcIcmsSt: number;
+  vlIcmsSt: number;
+  codInf: string;
+  vlPis: number;
+  vlCofins: number;
+  codCta: string;
+  tpLigacao: string;
+  codGrupoTensao: string;
+}
+
 export interface Nota {
   numeroDoc: string;
   chaveNfe: string;
@@ -66,6 +160,10 @@ export interface ItemDetalhado {
   aliqIcms: number;
   valorBcIcms: number;
   valorIcms: number;
+  valorBcIcmsSt?: number;
+  valorIcmsSt?: number;
+  valorReducaoBC?: number;
+  valorIpi?: number;
   numeroDoc: string;
   chaveNfe: string;
   dataDocumento: Date | null;
@@ -96,6 +194,40 @@ export interface ProcessedData {
   // Metadados do arquivo (registro 0000)
   companyName?: string;
   cnpj?: string;
+}
+
+// Interface expandida para SpedEditor com dados completos
+export interface ProcessedDataComplete extends ProcessedData {
+  // Documentos de entrada (D100)
+  documentosEntrada: DocumentoEntrada[];
+  
+  // Itens detalhados completos (C170 + D170)
+  itensDetalhadosCompletos: ItemDetalhadoCompleto[];
+  
+  // Registros D190 (totais de entrada por CFOP)
+  totaisEntradaPorCfop: Array<{
+    cstIcms: string;
+    cfop: string;
+    aliqIcms: number;
+    vlOper: number;
+    vlBcIcms: number;
+    vlIcms: number;
+    vlBcIcmsSt: number;
+    vlIcmsSt: number;
+    redBcIcms: number;
+    vlIpiCont: number;
+    codObs: string;
+  }>;
+  
+  // Metadados para edição
+  registrosOriginais: {
+    c100: string[]; // Linhas originais C100
+    c170: string[]; // Linhas originais C170
+    c190: string[]; // Linhas originais C190
+    d100: string[]; // Linhas originais D100
+    d170: string[]; // Linhas originais D170
+    d190: string[]; // Linhas originais D190
+  };
 }
 
 export type FilteredProcessedData = Omit<

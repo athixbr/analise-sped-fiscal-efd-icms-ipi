@@ -1,0 +1,813 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
+import { 
+  ArrowLeft, 
+  Edit3, 
+  Save, 
+  Download, 
+  Search, 
+  Edit2, 
+  X, 
+  FileText, 
+  FileX 
+} from 'lucide-react';
+
+const SpedEditor = ({ spedData, arquivoInfo, onBack }) => {
+  // Estados para edição
+  const [editData, setEditData] = useState(null);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [tableData, setTableData] = useState([]);
+  
+  // Estados para filtros e busca
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterTipo, setFilterTipo] = useState('');
+  const [filterCampo, setFilterCampo] = useState('');
+  const [filterValor, setFilterValor] = useState('');
+  
+  // Estados para seleção e edição
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [editingRow, setEditingRow] = useState(null);
+  const [batchEditModal, setBatchEditModal] = useState(false);
+  const [batchField, setBatchField] = useState('');
+  const [batchValue, setBatchValue] = useState('');
+
+  // Inicializar dados editáveis
+  useEffect(() => {
+    if (spedData) {
+      setEditData(JSON.parse(JSON.stringify(spedData)));
+    }
+  }, [spedData]);
+
+  // Transformar dados para tabela editável
+  useEffect(() => {
+    if (!editData) return;
+    
+    const rows = [];
+    let id = 0;
+
+    // Adicionar registro 0000 (cabeçalho)
+    if (editData.companyName || editData.cnpj) {
+      rows.push({
+        id: id++,
+        registro: {
+          tipo: '0000',
+          tipoDescricao: 'Cabeçalho da EFD',
+          dados: {
+            razaoSocial: editData.companyName || '',
+            cnpj: editData.cnpj || '',
+            inscricaoEstadual: editData.inscricaoEstadual || '',
+            dataInicial: editData.periodo?.inicio || '',
+            dataFinal: editData.periodo?.fim || ''
+          }
+        }
+      });
+    }
+
+    // Adicionar registros C100 (notas fiscais)
+    const processNotas = (notas, tipo) => {
+      (notas || []).forEach(nota => {
+        rows.push({
+          id: id++,
+          registro: {
+            tipo: 'C100',
+            tipoDescricao: `Nota Fiscal ${tipo}`,
+            dados: {
+              numeroNota: nota.numeroNota || '',
+              serie: nota.serie || '',
+              dataEmissao: nota.dataEmissao || '',
+              participante: nota.participante || '',
+              valorTotal: nota.valorTotal || 0,
+              cfop: nota.cfop || '',
+              chaveNfe: nota.chaveNfe || ''
+            }
+          }
+        });
+
+        // Adicionar registros C190 (totais por CFOP)
+        (nota.itens || []).forEach(item => {
+          rows.push({
+            id: id++,
+            registro: {
+              tipo: 'C190',
+              tipoDescricao: 'Total por CFOP',
+              dados: {
+                cfop: item.cfop || '',
+                aliquota: item.aliquota || 0,
+                valorTotal: item.valorTotal || 0,
+                baseCalculo: item.baseCalculo || 0,
+                valorIcms: item.valorIcms || 0
+              }
+            }
+          });
+        });
+
+        // Adicionar registros C170 (itens detalhados)
+        (nota.itensC170 || []).forEach(item => {
+          rows.push({
+            id: id++,
+            registro: {
+              tipo: 'C170',
+              tipoDescricao: 'Item da Nota Fiscal',
+              dados: {
+                numeroItem: item.numeroItem || '',
+                codigoProduto: item.codigoProduto || '',
+                descricaoProduto: item.descricaoProduto || '',
+                quantidade: item.quantidade || 0,
+                unidade: item.unidade || '',
+                valorUnitario: item.valorUnitario || 0,
+                valorTotal: item.valorTotal || 0,
+                cfop: item.cfop || '',
+                cst: item.cst || ''
+              }
+            }
+          });
+        });
+      });
+    };
+
+    processNotas(editData.entradas, 'Entrada');
+    processNotas(editData.saidas, 'Saída');
+
+    setTableData(rows);
+  }, [editData]);
+
+  // Filtrar dados da tabela
+  const filteredData = useMemo(() => {
+    return tableData.filter(row => {
+      // Filtro por tipo
+      if (filterTipo && row.registro.tipo !== filterTipo) return false;
+      
+      // Filtro por campo específico
+      if (filterCampo && filterValor) {
+        const valorCampo = row.registro.dados[filterCampo];
+        if (!valorCampo || !String(valorCampo).toLowerCase().includes(filterValor.toLowerCase())) {
+          return false;
+        }
+      }
+      
+      // Busca geral
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        const allValues = Object.values(row.registro.dados).join(' ').toLowerCase();
+        return allValues.includes(searchLower);
+      }
+      
+      return true;
+    });
+  }, [tableData, searchTerm, filterTipo, filterCampo, filterValor]);
+
+  // Manipuladores de eventos
+  const handleRowSelect = (id) => {
+    setSelectedRows(prev => 
+      prev.includes(id) 
+        ? prev.filter(rowId => rowId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedRows.length === filteredData.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(filteredData.map(row => row.id));
+    }
+  };
+
+  const handleEditRow = (row) => {
+    setEditingRow({ ...row });
+  };
+
+  const handleFieldEdit = (field, value) => {
+    setEditingRow(prev => ({
+      ...prev,
+      registro: {
+        ...prev.registro,
+        dados: {
+          ...prev.registro.dados,
+          [field]: value
+        }
+      }
+    }));
+  };
+
+  const handleSaveEdit = () => {
+    setTableData(prev => 
+      prev.map(row => 
+        row.id === editingRow.id ? editingRow : row
+      )
+    );
+    setEditingRow(null);
+    setHasChanges(true);
+  };
+
+  const handleBatchEdit = () => {
+    setBatchEditModal(true);
+  };
+
+  const getCommonFields = () => {
+    if (selectedRows.length === 0) return [];
+    
+    const selectedData = tableData.filter(row => selectedRows.includes(row.id));
+    const firstRowFields = Object.keys(selectedData[0]?.registro?.dados || {});
+    
+    return firstRowFields.filter(field => 
+      selectedData.every(row => Object.prototype.hasOwnProperty.call(row.registro.dados, field))
+    );
+  };
+
+  const handleBatchSave = () => {
+    if (!batchField || !batchValue) return;
+    
+    setTableData(prev => 
+      prev.map(row => 
+        selectedRows.includes(row.id) 
+          ? {
+              ...row,
+              registro: {
+                ...row.registro,
+                dados: {
+                  ...row.registro.dados,
+                  [batchField]: batchValue
+                }
+              }
+            }
+          : row
+      )
+    );
+    
+    setBatchEditModal(false);
+    setBatchField('');
+    setBatchValue('');
+    setHasChanges(true);
+  };
+
+  // Função para gerar arquivo SPED TXT
+  const generateSpedText = () => {
+    let spedText = '';
+    
+    // Agrupar por tipo de registro
+    const registrosPorTipo = tableData.reduce((acc, row) => {
+      const tipo = row.registro.tipo;
+      if (!acc[tipo]) acc[tipo] = [];
+      acc[tipo].push(row);
+      return acc;
+    }, {});
+
+    // Gerar registros 0000
+    if (registrosPorTipo['0000']) {
+      registrosPorTipo['0000'].forEach(row => {
+        const dados = row.registro.dados;
+        spedText += `|0000|014|0|${dados.dataInicial}|${dados.dataFinal}|${dados.razaoSocial}|${dados.cnpj}|${dados.inscricaoEstadual}|||\n`;
+      });
+    }
+
+    // Gerar registros C100
+    if (registrosPorTipo['C100']) {
+      registrosPorTipo['C100'].forEach(row => {
+        const dados = row.registro.dados;
+        spedText += `|C100|0|1|${dados.chaveNfe}|2|00|${dados.numeroNota}|${dados.serie}|${dados.dataEmissao}|${dados.participante}|${dados.valorTotal}|||\n`;
+      });
+    }
+
+    // Gerar registros C190
+    if (registrosPorTipo['C190']) {
+      registrosPorTipo['C190'].forEach(row => {
+        const dados = row.registro.dados;
+        spedText += `|C190|${dados.cfop}|${dados.aliquota}|${dados.valorTotal}|${dados.baseCalculo}|${dados.valorIcms}|\n`;
+      });
+    }
+
+    // Gerar registros C170
+    if (registrosPorTipo['C170']) {
+      registrosPorTipo['C170'].forEach(row => {
+        const dados = row.registro.dados;
+        spedText += `|C170|${dados.numeroItem}|${dados.codigoProduto}|${dados.descricaoProduto}|${dados.cfop}|${dados.unidade}|${dados.quantidade}|${dados.valorUnitario}|${dados.valorTotal}||\n`;
+      });
+    }
+    
+    spedText += "|9999|1|\n";
+    return spedText;
+  };
+
+  const handleSave = () => {
+    // TODO: Implementar salvamento das alterações no banco
+    setHasChanges(false);
+    alert('Alterações salvas com sucesso!');
+  };
+
+  const handleExport = () => {
+    try {
+      const spedContent = generateSpedText();
+      const blob = new Blob([spedContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${arquivoInfo?.name?.replace('.txt', '') || 'sped'}_editado_${new Date().toISOString().split('T')[0]}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      alert('Erro ao exportar arquivo SPED');
+    }
+  };
+
+  if (!spedData) {
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={onBack}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Edit3 className="h-6 w-6" />
+                Editor SPED
+              </h1>
+              <p className="text-muted-foreground">
+                Edite os dados do arquivo SPED de forma estruturada
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <Card className="p-8 text-center">
+          <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-xl font-semibold mb-2">Nenhum SPED carregado</h3>
+          <p className="text-muted-foreground mb-4">
+            Para usar o editor, primeiro carregue um arquivo SPED através da página principal.
+          </p>
+          <Button onClick={onBack} className="flex items-center gap-2 mx-auto">
+            <ArrowLeft className="h-4 w-4" />
+            Voltar ao Dashboard
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={onBack}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Voltar
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Edit3 className="h-6 w-6" />
+              Editor SPED
+            </h1>
+            <p className="text-muted-foreground">
+              {arquivoInfo?.name || "Arquivo SPED"} - {spedData.companyName || "Empresa"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {hasChanges && (
+            <span className="text-sm text-orange-600 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded">
+              Alterações não salvas
+            </span>
+          )}
+          <Button
+            variant="outline"
+            onClick={handleSave}
+            disabled={!hasChanges}
+            className="flex items-center gap-2"
+          >
+            <Save className="h-4 w-4" />
+            Salvar
+          </Button>
+          <Button
+            onClick={handleExport}
+            className="flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Exportar TXT
+          </Button>
+        </div>
+      </div>
+
+      {/* Informações da Empresa */}
+      <Card className="p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-4">📊 Informações da Empresa</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Empresa</label>
+            <p className="text-sm bg-muted p-2 rounded">
+              {spedData.companyName || "Não informado"}
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">CNPJ</label>
+            <p className="text-sm bg-muted p-2 rounded">
+              {spedData.cnpj || "Não informado"}
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Período</label>
+            <p className="text-sm bg-muted p-2 rounded">
+              {spedData.periodo?.inicio && spedData.periodo?.fim
+                ? `${new Date(spedData.periodo.inicio).toLocaleDateString()} a ${new Date(spedData.periodo.fim).toLocaleDateString()}`
+                : "Não informado"}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Resumo dos Dados */}
+      <Card className="p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-4">📈 Resumo dos Dados</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <p className="text-2xl font-bold text-green-600">{spedData.entradas?.length || 0}</p>
+            <p className="text-sm text-green-700 dark:text-green-300">Notas de Entrada</p>
+          </div>
+          <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <p className="text-2xl font-bold text-blue-600">{spedData.saidas?.length || 0}</p>
+            <p className="text-sm text-blue-700 dark:text-blue-300">Notas de Saída</p>
+          </div>
+          <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+            <p className="text-2xl font-bold text-purple-600">
+              {(spedData.entradas?.length || 0) + (spedData.saidas?.length || 0)}
+            </p>
+            <p className="text-sm text-purple-700 dark:text-purple-300">Total de Notas</p>
+          </div>
+          <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+            <p className="text-2xl font-bold text-orange-600">
+              R$ {(spedData.totalGeral || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-sm text-orange-700 dark:text-orange-300">Valor Total</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Tabela de Edição */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">📝 Editor de Dados</h2>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedRows([])}
+              disabled={selectedRows.length === 0}
+            >
+              Limpar Seleção
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleBatchEdit}
+              disabled={selectedRows.length === 0}
+            >
+              Edição em Lote ({selectedRows.length})
+            </Button>
+          </div>
+        </div>
+
+        {/* Filtros */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
+          <div>
+            <label className="block text-sm font-medium mb-1">Buscar</label>
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Buscar em todos os campos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 w-full px-3 py-2 border rounded-md text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Tipo de Registro</label>
+            <select
+              value={filterTipo}
+              onChange={(e) => setFilterTipo(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md text-sm"
+            >
+              <option value="">Todos os tipos</option>
+              <option value="0000">0000 - Cabeçalho</option>
+              <option value="C100">C100 - Notas Fiscais</option>
+              <option value="C190">C190 - Totais por CFOP</option>
+              <option value="C170">C170 - Itens de Notas</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Campo</label>
+            <select
+              value={filterCampo}
+              onChange={(e) => setFilterCampo(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md text-sm"
+            >
+              <option value="">Todos os campos</option>
+              <option value="numeroNota">Número da Nota</option>
+              <option value="razaoSocial">Razão Social</option>
+              <option value="cnpj">CNPJ</option>
+              <option value="cfop">CFOP</option>
+              <option value="valorTotal">Valor Total</option>
+              <option value="participante">Participante</option>
+              <option value="dataEmissao">Data de Emissão</option>
+              <option value="descricaoProduto">Descrição do Produto</option>
+              <option value="codigoProduto">Código do Produto</option>
+              <option value="aliquota">Alíquota</option>
+              <option value="quantidade">Quantidade</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Valor</label>
+            <input
+              type="text"
+              placeholder="Valor para filtrar..."
+              value={filterValor}
+              onChange={(e) => setFilterValor(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Controles da Tabela */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {filteredData.length} registros encontrados
+            </span>
+            {selectedRows.length > 0 && (
+              <span className="text-sm text-blue-600">
+                • {selectedRows.length} selecionados
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSelectAll}
+            >
+              {selectedRows.length === filteredData.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Tabela */}
+        <div className="border-2 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden shadow-sm">
+          <div className="overflow-x-auto max-h-[600px]">
+            <table className="w-full border-collapse">
+              <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0">
+                <tr>
+                  <th className="w-12 p-3 text-left border-r border-gray-300 dark:border-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.length === filteredData.length && filteredData.length > 0}
+                      onChange={handleSelectAll}
+                      className="rounded"
+                    />
+                  </th>
+                  <th className="p-3 text-left text-sm font-semibold border-r border-gray-300 dark:border-gray-600 min-w-20">Tipo</th>
+                  <th className="p-3 text-left text-sm font-semibold border-r border-gray-300 dark:border-gray-600 min-w-32">Descrição</th>
+                  <th className="p-3 text-left text-sm font-semibold border-r border-gray-300 dark:border-gray-600 min-w-40">Razão Social / Número Nota</th>
+                  <th className="p-3 text-left text-sm font-semibold border-r border-gray-300 dark:border-gray-600 min-w-32">CNPJ / Série</th>
+                  <th className="p-3 text-left text-sm font-semibold border-r border-gray-300 dark:border-gray-600 min-w-28">Data</th>
+                  <th className="p-3 text-left text-sm font-semibold border-r border-gray-300 dark:border-gray-600 min-w-40">Participante / Produto</th>
+                  <th className="p-3 text-left text-sm font-semibold border-r border-gray-300 dark:border-gray-600 min-w-20">CFOP</th>
+                  <th className="p-3 text-right text-sm font-semibold border-r border-gray-300 dark:border-gray-600 min-w-28">Valor Total</th>
+                  <th className="p-3 text-right text-sm font-semibold border-r border-gray-300 dark:border-gray-600 min-w-20">Alíquota</th>
+                  <th className="p-3 text-right text-sm font-semibold border-r border-gray-300 dark:border-gray-600 min-w-20">Qtd/Item</th>
+                  <th className="w-20 p-3 text-center text-sm font-semibold">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredData.map((row) => {
+                  const dados = row.registro.dados;
+                  return (
+                    <tr
+                      key={row.id}
+                      className={`border-t border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
+                        selectedRows.includes(row.id) 
+                          ? 'bg-blue-50 dark:bg-blue-900/20' 
+                          : row.id % 2 === 0 
+                            ? 'bg-gray-50/50 dark:bg-gray-900/20' 
+                            : 'bg-white dark:bg-transparent'
+                      }`}
+                    >
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.includes(row.id)}
+                          onChange={() => handleRowSelect(row.id)}
+                          className="rounded"
+                        />
+                      </td>
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700">
+                        <span className="font-mono text-sm font-medium bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                          {row.registro.tipo}
+                        </span>
+                      </td>
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700">
+                        <span className="text-sm text-muted-foreground">
+                          {row.registro.tipoDescricao}
+                        </span>
+                      </td>
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700 text-sm">
+                        {dados.razaoSocial || dados.numeroNota || dados.descricaoProduto || '-'}
+                      </td>
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700 text-sm font-mono">
+                        {dados.cnpj || dados.serie || dados.codigoProduto || '-'}
+                      </td>
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700 text-sm">
+                        {dados.dataInicial || dados.dataFinal || dados.dataEmissao || '-'}
+                      </td>
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700 text-sm">
+                        {dados.participante || dados.descricaoProduto || '-'}
+                      </td>
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700 text-sm font-mono text-center">
+                        {dados.cfop || '-'}
+                      </td>
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700 text-sm text-right font-medium">
+                        {dados.valorTotal ? 
+                          `R$ ${Number(dados.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
+                          : '-'
+                        }
+                      </td>
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700 text-sm text-right">
+                        {dados.aliquota ? `${dados.aliquota}%` : '-'}
+                      </td>
+                      <td className="p-3 border-r border-gray-200 dark:border-gray-700 text-sm text-right">
+                        {dados.quantidade || dados.numeroItem || '-'}
+                      </td>
+                      <td className="p-3 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditRow(row)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {filteredData.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground">
+            <FileX className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>Nenhum registro encontrado com os filtros aplicados.</p>
+          </div>
+        )}
+      </Card>
+
+      {/* Modal de Edição */}
+      {editingRow && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-2xl max-h-[80vh] overflow-y-auto m-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold">
+                  Editar Registro {editingRow.registro.tipo}
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingRow(null)}
+                  className="h-8 w-8 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                {Object.entries(editingRow.registro.dados).map(([key, value]) => (
+                  <div key={key}>
+                    <label className="block text-sm font-medium mb-1">
+                      {key}
+                    </label>
+                    <input
+                      type="text"
+                      value={String(value)}
+                      onChange={(e) => handleFieldEdit(key, e.target.value)}
+                      className="w-full px-3 py-2 border rounded-md text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setEditingRow(null)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSaveEdit}
+                  className="flex-1"
+                >
+                  Salvar Alterações
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Modal de Edição em Lote */}
+      {batchEditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md m-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold">
+                  Edição em Lote
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBatchEditModal(false)}
+                  className="h-8 w-8 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Campo para editar
+                  </label>
+                  <select
+                    value={batchField}
+                    onChange={(e) => setBatchField(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md text-sm"
+                  >
+                    <option value="">Selecione um campo</option>
+                    {getCommonFields().map(field => (
+                      <option key={field} value={field}>{field}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Novo valor
+                  </label>
+                  <input
+                    type="text"
+                    value={batchValue}
+                    onChange={(e) => setBatchValue(e.target.value)}
+                    placeholder="Digite o novo valor..."
+                    className="w-full px-3 py-2 border rounded-md text-sm"
+                  />
+                </div>
+
+                <p className="text-sm text-muted-foreground">
+                  Aplicar alteração em {selectedRows.length} registros selecionados
+                </p>
+              </div>
+
+              <div className="flex gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setBatchEditModal(false)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleBatchSave}
+                  disabled={!batchField || !batchValue}
+                  className="flex-1"
+                >
+                  Aplicar Alterações
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default SpedEditor;

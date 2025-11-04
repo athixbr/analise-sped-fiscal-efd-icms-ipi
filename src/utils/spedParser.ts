@@ -53,6 +53,7 @@ export class SpedParser {
     const lines = fileContent.split("\n").filter((line) => line.trim());
     this.resetData();
     let currentNota: Nota | null = null;
+    let currentNotaEntrada: Nota | null = null;
     const total = lines.length;
     let processed = 0;
     const STEP = 200;
@@ -60,13 +61,26 @@ export class SpedParser {
       try {
         const registro = this.parseRegistro(line);
         if (!registro || !registro.tipo) continue;
+        
+        // Processamento de registros de cabeçalho
         if (registro.tipo === "0000") this.process0000(registro);
+        
+        // Processamento de registros de saída (C100, C170, C190)
         else if (registro.tipo === "C100")
           currentNota = this.processC100(registro) as Nota | null;
         else if (registro.tipo === "C190" && currentNota)
           this.processC190(registro, currentNota);
         else if (registro.tipo === "C170" && currentNota)
           this.processC170(registro, currentNota);
+          
+        // Processamento de registros de entrada (D100, D170, D190)
+        else if (registro.tipo === "D100")
+          currentNotaEntrada = this.processD100(registro) as Nota | null;
+        else if (registro.tipo === "D190" && currentNotaEntrada)
+          this.processD190(registro, currentNotaEntrada);
+        else if (registro.tipo === "D170" && currentNotaEntrada)
+          this.processD170(registro, currentNotaEntrada);
+          
       } catch (err) {
         console.warn("Linha SPED ignorada por erro de parsing:", err);
       } finally {
@@ -178,17 +192,34 @@ export class SpedParser {
 
   processC190(registro: any, nota: Nota) {
     const campos = registro.campos;
-    if (campos.length < 5) return;
+    if (campos.length < 7) return;
+    
+    const cstIcms = campos[1];
     const cfop = campos[2];
+    const aliqIcms = this.parseValor(campos[3]);
     const valorOperacao = this.parseValor(campos[4]);
+    const valorBcIcms = this.parseValor(campos[5]);
+    const valorIcms = this.parseValor(campos[6]);
+    const valorBcIcmsSt = this.parseValor(campos[7]);
+    const valorIcmsSt = this.parseValor(campos[8]);
+    const valorReducaoBC = this.parseValor(campos[9]);
+    const valorIpi = this.parseValor(campos[10]);
+    
     if (valorOperacao > 0 && nota.situacao === "00") {
       const item = {
         cfop,
         valorOperacao,
-        cstIcms: campos[1],
-        aliqIcms: this.parseValor(campos[3]),
-        valorBcIcms: this.parseValor(campos[5]),
-        valorIcms: this.parseValor(campos[6]),
+        aliquota: aliqIcms, // Para compatibilidade com código existente
+        baseCalculo: valorBcIcms, // Para compatibilidade com código existente
+        valorTotal: valorOperacao, // Para compatibilidade com código existente
+        cstIcms,
+        aliqIcms,
+        valorBcIcms,
+        valorIcms,
+        valorBcIcmsSt,
+        valorIcmsSt,
+        valorReducaoBC,
+        valorIpi
       };
       nota.itens.push(item);
       if (!this.data.itensPorCfop.has(cfop)) this.data.itensPorCfop.set(cfop, []);
@@ -199,6 +230,10 @@ export class SpedParser {
         aliqIcms: item.aliqIcms,
         valorBcIcms: item.valorBcIcms,
         valorIcms: item.valorIcms,
+        valorBcIcmsSt: item.valorBcIcmsSt,
+        valorIcmsSt: item.valorIcmsSt,
+        valorReducaoBC: item.valorReducaoBC,
+        valorIpi: item.valorIpi,
         numeroDoc: nota.numeroDoc,
         chaveNfe: nota.chaveNfe,
         dataDocumento: nota.dataDocumento,
@@ -336,6 +371,166 @@ export class SpedParser {
     const item = this.data.saidasPorDiaCfop.get(key)!;
     item.valor += valor;
   }
+
+  // ===== MÉTODOS PARA PROCESSAMENTO DE ENTRADAS (D100, D170, D190) =====
+
+  processD100(registro: any): Nota | null {
+    const campos = registro.campos;
+    if (campos.length < 12) return null;
+    const dataDoc = this.parseDate(campos[10]); // Data do documento
+    const dataES = this.parseDate(campos[11]); // Data de entrada/saída  
+    const valorDoc = this.parseValor(campos[12]); // Valor do documento
+    const valorMerc = this.parseValor(campos[16]); // Valor da mercadoria
+    const indicadorOperacao = "0"; // Sempre entrada para D100
+    const situacao = campos[5]; // Situação do documento
+    
+    const nota: Nota = {
+      numeroDoc: campos[8], // Número do documentonpm
+      chaveNfe: campos[9], // Chave NFe
+      dataDocumento: dataDoc,
+      dataEntradaSaida: dataES,
+      valorDocumento: valorDoc,
+      valorMercadoria: valorMerc,
+      indicadorOperacao: indicadorOperacao as "0",
+      situacao,
+      itens: [],
+      itensC170: [], // Será usado para D170
+    };
+
+    if (valorDoc > 0 && situacao === "00") {
+      this.data.entradas.push(nota);
+      
+      if (dataDoc && (!this.data.periodo.inicio || !this.data.periodo.fim)) {
+        if (!this.data.periodo.inicio || dataDoc < this.data.periodo.inicio)
+          this.data.periodo.inicio = dataDoc;
+        if (!this.data.periodo.fim || dataDoc > this.data.periodo.fim)
+          this.data.periodo.fim = dataDoc;
+      }
+    }
+    return nota;
+  }
+
+  processD190(registro: any, nota: Nota) {
+    const campos = registro.campos;
+    if (campos.length < 11) return; // Espera pelo menos 10 campos + código do registro
+    
+    const cstIcms = campos[1];
+    const cfop = campos[2];
+    const aliqIcms = this.parseValor(campos[3]);
+    const valorOperacao = this.parseValor(campos[4]);
+    const valorBcIcms = this.parseValor(campos[5]);
+    const valorIcms = this.parseValor(campos[6]);
+    const valorBcIcmsSt = this.parseValor(campos[7]);
+    const valorIcmsSt = this.parseValor(campos[8]);
+    const valorReducaoBC = this.parseValor(campos[9]);
+    const valorIpi = this.parseValor(campos[10]);
+    
+    if (valorOperacao > 0 && nota.situacao === "00") {
+      const item = {
+        cfop,
+        valorOperacao,
+        cstIcms,
+        aliqIcms,
+        valorBcIcms,
+        valorIcms,
+        valorBcIcmsSt,
+        valorIcmsSt,
+        valorReducaoBC,
+        valorIpi
+      };
+      
+      nota.itens.push(item);
+      
+      if (!this.data.itensPorCfop.has(cfop)) this.data.itensPorCfop.set(cfop, []);
+      this.data.itensPorCfop.get(cfop)!.push({
+        cfop,
+        valorOperacao: item.valorOperacao,
+        cstIcms: item.cstIcms,
+        aliqIcms: item.aliqIcms,
+        valorBcIcms: item.valorBcIcms,
+        valorIcms: item.valorIcms,
+        valorBcIcmsSt: item.valorBcIcmsSt,
+        valorIcmsSt: item.valorIcmsSt,
+        valorReducaoBC: item.valorReducaoBC,
+        valorIpi: item.valorIpi,
+        numeroDoc: nota.numeroDoc,
+        chaveNfe: nota.chaveNfe,
+        dataDocumento: nota.dataDocumento,
+        dataEntradaSaida: nota.dataEntradaSaida,
+        valorTotal: nota.valorDocumento,
+        situacao: nota.situacao,
+      });
+
+      const dataKey = this.formatDateKey(nota.dataDocumento);
+      if (dataKey) {
+        // Para D190, sempre é entrada (indicadorOperacao === "0")
+        this.acumularEntradaPorDia(dataKey, valorOperacao);
+        this.acumularEntradaPorCfop(cfop, valorOperacao);
+        this.acumularEntradaPorDiaCfop(dataKey, cfop, valorOperacao);
+        this.data.totalEntradas += valorOperacao;
+      }
+      this.data.totalGeral += valorOperacao;
+    }
+  }
+
+  processD170(registro: any, nota: Nota) {
+    const c = registro.campos || [];
+    const safe = (i: number) => (i >= 0 && i < c.length ? c[i] : undefined);
+    
+    const numItem = parseInt(safe(1) || "") || undefined;
+    const codItem = safe(2);
+    const descrCompl = safe(3);
+    const quantidade = this.parseValor(safe(4));
+    const unidade = safe(5);
+    const valorItem = this.parseValor(safe(6));
+    const valorDesconto = this.parseValor(safe(7));
+    
+    // Para D170, a estrutura é similar ao C170 mas pode ter posições diferentes
+    const rawCst9 = safe(9);
+    const rawCfop10 = safe(10);
+    const rawCst11 = safe(11);
+    const rawBc12 = safe(12);
+    const rawAliq13 = safe(13);
+    const rawIcms14 = safe(14);
+    const rawBc14 = safe(14);
+    const rawIcms15 = safe(15);
+
+    const looksLikeCfop = (s?: string) => !!(s && /^\d{4}$/.test(s));
+    const looksLikeCst = (s?: string) => !!(s && /^\d{2,3}$/.test(s));
+
+    const cfop = looksLikeCfop(rawCfop10)
+      ? rawCfop10
+      : looksLikeCfop(rawCst11)
+        ? rawCst11
+        : rawCfop10 || rawCst11 || "";
+    const cstIcms = looksLikeCst(rawCst11)
+      ? rawCst11
+      : looksLikeCst(rawCst9)
+        ? rawCst9
+        : rawCst11 || rawCst9 || "";
+    const valorBcIcms = this.parseValor(rawBc12 ?? rawBc14);
+    const aliqIcms = this.parseValor(rawAliq13);
+    const valorIcms = this.parseValor(rawIcms15 ?? rawIcms14);
+
+    const item: NotaItemC170 = {
+      numItem,
+      codItem,
+      descrCompl,
+      quantidade: isNaN(quantidade) ? undefined : quantidade,
+      unidade,
+      valorItem: isNaN(valorItem) ? undefined : valorItem,
+      valorDesconto: isNaN(valorDesconto) ? undefined : valorDesconto,
+      cfop,
+      cstIcms,
+      aliqIcms: isNaN(aliqIcms) ? undefined : aliqIcms,
+      valorBcIcms: isNaN(valorBcIcms) ? undefined : valorBcIcms,
+      valorIcms: isNaN(valorIcms) ? undefined : valorIcms,
+    };
+    
+    if (!nota.itensC170) nota.itensC170 = [];
+    nota.itensC170.push(item);
+  }
+
   processarDadosFinais() {
     this.data.entradasPorDiaArray = Array.from(
       this.data.entradasPorDia.entries() as Iterable<[string, number]>
