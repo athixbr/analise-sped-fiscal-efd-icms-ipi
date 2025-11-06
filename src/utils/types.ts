@@ -24,6 +24,22 @@ export interface NotaItemC170 {
   valorIcms?: number;
 }
 
+// Interface para produtos do cadastro (registro 0200)
+export interface Produto0200 {
+  codItem: string;
+  descrItem: string;
+  codBarra?: string;
+  codAntItem?: string;
+  unidInv?: string;
+  tipoItem: string;
+  codNcm?: string;
+  exIpi?: string;
+  codGen?: string;
+  codLst?: string;
+  aliqIcms?: number;
+  cest?: string;
+}
+
 // Interface completa para item detalhado (C170/D170) com todos os campos tributários
 export interface ItemDetalhadoCompleto {
   // Identificação
@@ -194,6 +210,8 @@ export interface ProcessedData {
   // Metadados do arquivo (registro 0000)
   companyName?: string;
   cnpj?: string;
+  // Cadastro de produtos (registro 0200)
+  produtos?: Map<string, Produto0200>;
 }
 
 // Interface expandida para SpedEditor com dados completos

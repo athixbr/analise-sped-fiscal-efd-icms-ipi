@@ -37,6 +37,7 @@ export class SpedParser {
     itensPorCfopIndex?: Record<string, ItemDetalhado[]>;
     companyName?: string;
     cnpj?: string;
+    produtos?: Map<string, any>; // Para armazenar registros 0200
   };
   constructor() {
     this.resetData();
@@ -64,6 +65,9 @@ export class SpedParser {
         
         // Processamento de registros de cabeçalho
         if (registro.tipo === "0000") this.process0000(registro);
+        
+        // Processamento de registros de produtos (0200)  
+        else if (registro.tipo === "0200") this.process0200(registro);
         
         // Processamento de registros de saída (C100, C170, C190)
         else if (registro.tipo === "C100")
@@ -113,6 +117,7 @@ export class SpedParser {
       totalSaidas: 0,
       totalGeral: 0,
       periodo: { inicio: null, fim: null },
+      produtos: new Map(),
     };
   }
   process0000(registro: any) {
@@ -144,6 +149,53 @@ export class SpedParser {
       }
     } catch {
       // ignora
+    }
+  }
+
+  process0200(registro: any) {
+    const campos = registro.campos;
+    if (campos.length < 13) return; // Mínimo necessário para 0200
+    
+    try {
+      const codItem = campos[1];
+      const descrItem = campos[2];
+      const codBarra = campos[3];
+      const codAntItem = campos[4]; 
+      const unidInv = campos[5];
+      const tipoItem = campos[6];
+      const codNcm = campos[7];
+      const exIpi = campos[8];
+      const codGen = campos[9];
+      const codLst = campos[10];
+      const aliqIcms = this.parseValor(campos[11]);
+      const cest = campos[12];
+
+      const produto = {
+        codItem,
+        descrItem,
+        codBarra,
+        codAntItem,
+        unidInv,
+        tipoItem,
+        codNcm,
+        exIpi,
+        codGen,
+        codLst,
+        aliqIcms: isNaN(aliqIcms) ? undefined : aliqIcms,
+        cest
+      };
+
+      // Armazenar produto por código
+      if (codItem && this.data.produtos) {
+        this.data.produtos.set(codItem, produto);
+      }
+
+      // Também armazenar por código de barras se existir
+      if (codBarra && codBarra !== "SEM GTIN" && this.data.produtos) {
+        this.data.produtos.set(codBarra, produto);
+      }
+    } catch (err) {
+      console.warn("Erro ao processar registro 0200:", err);
     }
   }
 

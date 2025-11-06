@@ -60,9 +60,6 @@ const SpedEditor = ({ spedData, arquivoInfo, onBack }) => {
   const [editingModalItem, setEditingModalItem] = useState(null); // {itemIndex, field}
   const [editingModalValue, setEditingModalValue] = useState('');
 
-  // Estado para modal de aviso de teste
-  const [isTestingModalOpen, setIsTestingModalOpen] = useState(true);
-
   // Inicializar dados editáveis
   useEffect(() => {
     if (spedData) {
@@ -1170,73 +1167,290 @@ const SpedEditor = ({ spedData, arquivoInfo, onBack }) => {
         </div>
 
         {/* Tabela Excel-Style */}
-        <div className="border-2 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden shadow-sm">
-          <div className="overflow-x-auto max-h-[600px]">
-            <table className="w-full border-collapse text-sm">
-              <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0">
-                <tr>
-                  <th className="w-12 p-2 text-left border-r border-gray-300 dark:border-gray-600">
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.length === filteredTreeData.length && filteredTreeData.length > 0}
-                      onChange={handleSelectAll}
-                      className="rounded"
-                    />
-                  </th>
-                  <th className="p-2 text-left font-semibold border-r border-gray-300 dark:border-gray-600 min-w-16">Tipo</th>
-                  <th className="p-2 text-left font-semibold border-r border-gray-300 dark:border-gray-600 min-w-80">Descrição</th>
-                  <th className="p-2 text-left font-semibold border-r border-gray-300 dark:border-gray-600 min-w-20">CST ICMS</th>
-                  <th className="p-2 text-left font-semibold border-r border-gray-300 dark:border-gray-600 min-w-24">Data Doc</th>
-                  <th className="p-2 text-left font-semibold border-r border-gray-300 dark:border-gray-600 min-w-40">Participante</th>
-                  <th className="p-2 text-left font-semibold border-r border-gray-300 dark:border-gray-600 min-w-20">CFOP</th>
-                  <th className="p-2 text-right font-semibold border-r border-gray-300 dark:border-gray-600 min-w-24">Valor Operação</th>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted/40">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <input
+                    type="checkbox"
+                    checked={selectedRows.length === filteredTreeData.length && filteredTreeData.length > 0}
+                    onChange={handleSelectAll}
+                    className="rounded"
+                  />
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Tipo</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Descrição</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">CST ICMS</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Data Doc</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Participante</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">CFOP</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor Operação</th>
+                
+                {/* Campos ICMS */}
+                <th className="px-6 py-3 text-right text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                  Aliq ICMS
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                  BC ICMS
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                  Vlr ICMS
+                </th>
+                
+                {/* Campos ICMS ST */}
+                <th className="px-6 py-3 text-right text-xs font-medium text-cyan-600 dark:text-cyan-400 uppercase tracking-wider">
+                  BC ICMS ST
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-cyan-600 dark:text-cyan-400 uppercase tracking-wider">
+                  Vlr ICMS ST
+                </th>
+                
+                {/* Campos IPI */}
+                <th className="px-6 py-3 text-right text-xs font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wider">
+                  Vlr IPI
+                </th>
+                
+                {/* Campos PIS/COFINS */}
+                <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
+                  Vlr PIS
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">
+                  Aliq PIS
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                  Vlr COFINS
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                  Aliq COFINS
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-background divide-y divide-border">
+                {filteredTreeData.map((node, index) => {
+                  const dados = node.dados;
+                  const IconComponent = node.icon;
                   
-                  {/* Campos ICMS */}
-                  <th className="p-2 text-right font-semibold border-r border-gray-300 dark:border-gray-600 min-w-20 bg-blue-50 dark:bg-blue-900/20">
-                    Aliq ICMS
-                  </th>
-                  <th className="p-2 text-right font-semibold border-r border-gray-300 dark:border-gray-600 min-w-24 bg-blue-50 dark:bg-blue-900/20">
-                    BC ICMS
-                  </th>
-                  <th className="p-2 text-right font-semibold border-r border-gray-300 dark:border-gray-600 min-w-24 bg-blue-50 dark:bg-blue-900/20">
-                    Vlr ICMS
-                  </th>
-                  
-                  {/* Campos ICMS ST */}
-                  <th className="p-2 text-right font-semibold border-r border-gray-300 dark:border-gray-600 min-w-24 bg-cyan-50 dark:bg-cyan-900/20">
-                    BC ICMS ST
-                  </th>
-                  <th className="p-2 text-right font-semibold border-r border-gray-300 dark:border-gray-600 min-w-24 bg-cyan-50 dark:bg-cyan-900/20">
-                    Vlr ICMS ST
-                  </th>
-                  
-                  {/* Campos IPI */}
-                  <th className="p-2 text-right font-semibold border-r border-gray-300 dark:border-gray-600 min-w-24 bg-orange-50 dark:bg-orange-900/20">
-                    Vlr IPI
-                  </th>
-                  
-                  {/* Campos PIS/COFINS */}
-                  <th className="p-2 text-right font-semibold border-r border-gray-300 dark:border-gray-600 min-w-24 bg-green-50 dark:bg-green-900/20">
-                    Vlr PIS
-                  </th>
-                  <th className="p-2 text-right font-semibold border-r border-gray-300 dark:border-gray-600 min-w-20 bg-green-50 dark:bg-green-900/20">
-                    Aliq PIS
-                  </th>
-                  <th className="p-2 text-right font-semibold border-r border-gray-300 dark:border-gray-600 min-w-24 bg-purple-50 dark:bg-purple-900/20">
-                    Vlr COFINS
-                  </th>
-                  <th className="p-2 text-right font-semibold min-w-20 bg-purple-50 dark:bg-purple-900/20">
-                    Aliq COFINS
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Maintenance Mode */}
-                <tr>
-                  <td colSpan="100%" className="text-center p-4 text-gray-500">
-                    Sistema em manutenção. Por favor, tente novamente mais tarde.
-                  </td>
-                </tr>
+                  return (
+                    <tr
+                      key={node.id}
+                      className={index % 2 === 0 ? "bg-background" : "bg-muted/20"}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedRows.includes(node.id)}
+                            onChange={() => handleRowSelect(node.id)}
+                            className="rounded"
+                          />
+                          {/* Indentação para hierarquia */}
+                          <div style={{ marginLeft: `${node.level * 20}px` }} className="flex items-center gap-1">
+                            {node.isExpandable && (
+                              <button
+                                onClick={() => handleToggleExpand(node.id)}
+                                className="hover:bg-gray-200 dark:hover:bg-gray-600 rounded p-1"
+                              >
+                                {expandedNodes.has(node.id) ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                              </button>
+                            )}
+                            <IconComponent className="h-4 w-4 text-gray-500" />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <span className="font-mono text-xs font-medium bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded">
+                          {node.type}
+                        </span>
+                      </td>
+                      
+                      {/* Conteúdo principal baseado no tipo */}
+                      {node.type.startsWith('C100') || node.type.startsWith('D100') ? (
+                        // Linha de Nota Fiscal (cabeçalho expansível)
+                        <>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex items-center justify-between">
+                              <span>
+                                🧾 NF: {dados.numeroNota} | Série: {dados.serie} | {dados.dataEmissao ? new Date(dados.dataEmissao).toLocaleDateString('pt-BR') : ''} | R$ {Number(dados.valorTotal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAbrirEdicaoNota(node);
+                                }}
+                                className="ml-2 px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded flex items-center gap-1"
+                                title="Editar nota detalhada"
+                              >
+                                ✏️ Editar
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <EditableCell node={node} field="cstIcms" value={dados.situacao || ''} />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <EditableCell node={node} field="dataEmissao" value={dados.dataEmissao} />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <EditableCell node={node} field="participante" value={dados.participante} />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                            <EditableCell node={node} field="cfop" value={dados.cfop} />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+                            <EditableCell 
+                              node={node} 
+                              field="valorTotal" 
+                              value={dados.valorTotal ? 
+                                `${Number(dados.valorTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` 
+                                : ''
+                              } 
+                            />
+                          </td>
+                          {/* Campos tributários vazios para notas */}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm bg-blue-50/50">-</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm bg-blue-50/50">-</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm bg-blue-50/50">-</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm bg-cyan-50/50">-</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm bg-cyan-50/50">-</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm bg-orange-50/50">-</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm bg-green-50/50">-</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm bg-green-50/50">-</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm bg-purple-50/50">-</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm bg-purple-50/50">-</td>
+                        </>
+                      ) : node.type === 'ITENS_SECTION' ? (
+                        // Linha de Seção de Itens
+                        <>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-700 dark:text-blue-400 bg-blue-50/30" colSpan="17">
+                            {dados.titulo} ({dados.totalItens} itens)
+                          </td>
+                        </>
+                      ) : node.type === 'TOTAIS_SECTION' ? (
+                        // Linha de Seção de Totais
+                        <>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-700 dark:text-green-400 bg-green-50/30" colSpan="17">
+                            {dados.titulo} ({dados.totalCfops} CFOPs)
+                          </td>
+                        </>
+                      ) : node.type.endsWith('170') ? (
+                        // Linha de Item (com todos os campos tributários)
+                        <>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            Item {dados.numeroItem} - {dados.descricaoProduto} | CFOP {dados.cfop} | Qtd: {dados.quantidade} {dados.unidade} | Vlr Unit: R$ {Number(dados.valorUnitario || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <EditableCell node={node} field="cstIcms" value={dados.cstIcms} />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <EditableCell node={node} field="codigoProduto" value={dados.codigoProduto} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700">
+                            <EditableCell node={node} field="quantidade" value={`${dados.quantidade} ${dados.unidade}`} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-center">
+                            <EditableCell node={node} field="cfop" value={dados.cfop} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right">
+                            <EditableCell node={node} field="valorTotal" value={dados.valorTotal} />
+                          </td>
+                          
+                          {/* Campos ICMS */}
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-blue-50/50">
+                            <EditableCell node={node} field="aliqIcms" value={dados.aliqIcms ? `${dados.aliqIcms}%` : ''} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-blue-50/50">
+                            <EditableCell node={node} field="valorBcIcms" value={dados.valorBcIcms} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-blue-50/50">
+                            <EditableCell node={node} field="valorIcms" value={dados.valorIcms} />
+                          </td>
+                          
+                          {/* Campos ICMS ST */}
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-cyan-50/50">
+                            <EditableCell node={node} field="valorBcIcmsSt" value={dados.valorBcIcmsSt || 0} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-cyan-50/50">
+                            <EditableCell node={node} field="valorIcmsSt" value={dados.valorIcmsSt || 0} />
+                          </td>
+                          
+                          {/* Campos IPI */}
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-orange-50/50">
+                            <EditableCell node={node} field="vlIpi" value={dados.vlIpi} />
+                          </td>
+                          
+                          {/* Campos PIS/COFINS */}
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-green-50/50">
+                            <EditableCell node={node} field="vlPis" value={dados.vlPis} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-green-50/50">
+                            <EditableCell node={node} field="aliqPis" value={dados.aliqPis ? `${dados.aliqPis}%` : ''} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-purple-50/50">
+                            <EditableCell node={node} field="vlCofins" value={dados.vlCofins} />
+                          </td>
+                          <td className="p-2 bg-purple-50/50 text-right">
+                            <EditableCell node={node} field="aliqCofins" value={dados.aliqCofins ? `${dados.aliqCofins}%` : ''} />
+                          </td>
+                        </>
+                      ) : node.type.endsWith('190') ? (
+                        // Linha de Total (C190/D190)
+                        <>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 font-medium">
+                            CFOP {dados.cfop} | CST: {dados.cstIcms} | Aliq ICMS: {dados.aliquota}% | BC: R$ {Number(dados.valorBcIcms || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} | ICMS: R$ {Number(dados.valorIcms || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700">
+                            <EditableCell node={node} field="cstIcms" value={dados.cstIcms} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700">-</td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700">-</td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-center">
+                            <EditableCell node={node} field="cfop" value={dados.cfop} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right font-medium">
+                            <EditableCell node={node} field="valorOperacao" value={dados.valorOperacao} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-blue-50/50">
+                            <EditableCell node={node} field="aliquota" value={dados.aliquota ? `${dados.aliquota}%` : ''} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-blue-50/50">
+                            <EditableCell node={node} field="valorBcIcms" value={dados.valorBcIcms} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-blue-50/50">
+                            <EditableCell node={node} field="valorIcms" value={dados.valorIcms} />
+                          </td>
+                          {/* Campos ICMS ST */}
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-cyan-50/50">
+                            <EditableCell node={node} field="valorBcIcmsSt" value={dados.valorBcIcmsSt} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-cyan-50/50">
+                            <EditableCell node={node} field="valorIcmsSt" value={dados.valorIcmsSt} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 text-right bg-orange-50/50">
+                            <EditableCell node={node} field="valorReducaoBC" value={dados.valorReducaoBC} />
+                          </td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 bg-green-50/50">-</td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 bg-green-50/50">-</td>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700 bg-purple-50/50">
+                            <EditableCell node={node} field="valorIpi" value={dados.valorIpi} />
+                          </td>
+                          <td className="p-2 bg-purple-50/50">-</td>
+                        </>
+                      ) : (
+                        // Outros tipos
+                        <>
+                          <td className="p-2 border-r border-gray-200 dark:border-gray-700" colSpan="17">
+                            Tipo não reconhecido: {node.type}
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1629,22 +1843,6 @@ const SpedEditor = ({ spedData, arquivoInfo, onBack }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Modal para Aviso de Teste */}
-      {isTestingModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-96">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Módulo em Teste</h2>
-            <p className="text-gray-600 mb-6">Este módulo está atualmente em fase de testes. Algumas funcionalidades podem não estar disponíveis.</p>
-            <button
-              onClick={() => setIsTestingModalOpen(false)}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
